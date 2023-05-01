@@ -22,7 +22,7 @@
         <div class ="article">
             <h2>Three Waveform Digital Synthesizer with ADSR Amplitude Envelope</h2>
             <div class = "img-flex">
-                <img src="img/digi_synth.jpg" width="100%" height="auto" style="border-radius: 5%">
+                <img src="img/digi_synth.jpg" width="70%" height="auto" style="border-radius: 5%">
             </div>
             <div class = "p-flex" style="padding-top: 20px;">
                 <p style = "text-align:left">
@@ -41,7 +41,33 @@
             <h3>Audio Processing Block</h3>
             <div class = "p-flex">
               <p style = "text-align:left">
-                The audio processing block contains one task that receives notifications from the midi processing block and then synthesizes PCM values that are then sent to the PCM5102A. At the core of the audio processing block is the digital oscillator, it has three waveforms, a sin, sawtooth, and square wave, which can be selected through the midi controllers button bank. The frequency of the oscillator is updated on the reception of a Note On, Note Off, or Pitch Bend notification. The amplitude of the oscillator is determined by the ADSR envelope. The attack of the envelope is triggered on a Note On event, and the release is triggered when the gate of the midi controller becomes 0.
+                The audio processing block contains one task that receives notifications from the midi processing block and then synthesizes PCM values that are then sent to the PCM5102A over I2S. The audio processing block contains two synthesizer components, the oscillator and the envelope generator.
+              </p>
+            </div>
+            <h4>Digital Oscillator</h4>
+            <div class = "p-flex">
+              <p style = "text-align:left">  
+                The digital oscillator has three waveforms, a sin, sawtooth, and square wave, which can be selected through the midi controllers button bank. The state of the oscillator is stored in a struct which contains the waveform, angle, frequency, offset and the maximum and current amplitude. The three waveforms correspond to three functions that are normalized to have a period and amplitude of one, the current selection is stored in the oscillator struct as a function pointer. The angle of the oscillator indicates our current position in the period of our waveform. The offset is the amount we increment the angle per sample. The offset is calculated using the frequency. The maximum amplitude is set when the oscillator is initialized indicating the largest possible output of the oscillator. The current amplitude of the oscillator is a percentage of the maximum amplitude and is determined by the ADSR envelope. 
+              </p>
+            </div>
+            <h4>Envelope Generator</h4>
+            <div class = "p-flex">
+              <p style = "text-align:left">
+                The envelope generator (EG) generates a 4-segment ADSR envelope used to control the current amplitude of the oscillator. The state of the EG is stored in the EnvelopeGenerator struct which contains the settings of the EG, curve generators for the attack, decay and release segment, the current segment the EG is in, and the previous amplitude of the EG. The math behind the envelope generator is taken from chapter 6 of Will Pirkle's, <a href="https://www.amazon.com/Designing-Software-Synthesizer-Plugins-Audio/dp/0367510464">Designing Software Synthesizer Plug-Ins in C++: For TackAFX, VST3, and Audio Units</a>. The settings of the EG contain the TCO for the curve generators. The TCO dictates the shape of the curve, closer to 1 it is more linear and closer to 0 it becomes more of a 90 degree angle. The settings also indicate the number of samples that the attack, decay, and release segments will last and the sustain level. The curve generators approximate exponential curves with iterative multiplication and addition. Every curve has a coefficient and offset that are determined by the envelope settings. The current amplitude is multiplied by the coefficient and added to the offset to obtain the next amplitude. When the attack segment is triggered the amplitude starts at zero and increases until it hits 1. At this point we transition into the decay segment where we decrease until we hit our sustain value, transitioning to the sustain segment. When the release segment is triggered we decrease down from our previous amplitude until we hit zero. 
+              </p>
+            </div>
+            <h4>Synthesizer Flow Diagram</h4>
+            <div class = "p-flex">
+              <p style = "text-align:left">  
+                The figure below shows a flow diagram of how the samples are synthesized. We first check if any new notifications have been sent to the task, if so we then check the value of the notification. If the notification is a Control Change then we need to update the current waveform and the settings of the envelope generator which will be explained in a later section. If the notification is a Note Off or Pitch Bend event then the frequency and the offset of the oscillator need to be updated. If the notification is a Note On event then we need to trigger the envelope to start the attack phase and also update the frequency and offset of the oscillator. Once we have handled any new notifications we check the gate of the midi controller. If it is 0 meaning there are no notes actively being pressed then we trigger the release phase of the envelope. We then use the EG to calculate our current amplitude and then calculate the waveform value at our current angle multiplied by our maximum possible altitude and the current amplitude given to us by the EG. After this we increment the angle by the offset and check to see if the angle is greater than 1. If it is then we reset the angle back by subtracting 1 from it. We repeat the calculations of the amplitude and waveform value until we have a block of samples that we then copy to the DMA which transfers them to the I2s peripheral. 
+              </p>
+            </div>
+            <div class = "img-flex">
+              <img src="img/synth_flow.jpg" width="100%" height="auto">
+            </div>
+            <div class = "p-flex">
+              <p style = "text-align: left">
+                This video below shows the digital synthesizer in action. You can see me adjust the settings of the ADSR envelope with the 4 left-most faders in the bank and select the waveform with the 3 left-most buttons in the bank. The output of the DAC is shown on the oscilliscope display. 
               </p>
             </div>
             <div class = "img-flex">
