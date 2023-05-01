@@ -26,11 +26,23 @@
             </div>
             <div class = "p-flex" style="padding-top: 20px;">
                 <p style = "text-align:left">
-                    In this project I created a circuit that outputs data stored in an EEPROM
-                    to a 16x2 LCD screen. There are five main components to the circuit, the clock, 
-                    enable counter, address counter, EEPROM, and the LCD. This page details how each component works
-                    togather and a video is shown below of the circuit in action.
+                    In this project I created a digital synthesizer with an ESP32, Midi Breakout Board, and PCM5102A DAC. Midi messages are received over UART by the ESP32 which then synthesizes PCM values based on the selected waveform and ADSR (Attack, Decay, Sustain, Release) enevelope settings. The PCM values are then sent to the PCM5102A DAC over I2S. The application running on the ESP32 was written in C and uses FreeRTOS tasks, queues, and notifications. It can be broken up into two main blocks, the midi processing block and the audio processing block.
                 </p>
+            </div>
+            <h3>Midi Processing Block</h3>
+            <div class = "p-flex">
+                <p style = "text-align:left">
+                    The midi processing block is responsible for handling incoming midi messages and notifying the audio processing block of any changes to the gate, pitch, attack, decay, sustain, and release of the current note being synthesized. Although midi uses a 5-pin DIN connector, it is essentially just UART with a baudrate of 31250. The midi breakout board has the hardware needed to obtain this UART signal from the 5-pin DIN connector. The midi processing block contains two FreeRTOS tasks, MidiRecv and MidiProc. This first task sets up the ESP32 uart driver which creates a queue that we wait on for UART events. On a UART_DATA event we read in the UART RX buffer. All midi messages are 3 bytes long so we read the buffer three bytes at a time and send these bytes to a Queue that the MidiProc task is waiting on. 
+                </p>
+                <p style = "text-align:left">
+                  The MidiProc task receives midi messages from the MidiRecv task and updates the stored state of the midi controller as well as notify the audio processing task when a message occurs. The state of the midi controller consists of the gate, which signifies the amount of active notes, pitch and pitch bend, which signifies the current note being played and how much bend to add to it, and the values of the mod wheel, faders, knobs, and buttons. When the MidiProc task receives a midi message it takes the first four bits to determine the message ID. Our application responds to 4 midi message IDs, Note Off, Note On, Control Change, and Pitch Bend. On a Note On event we increment the gate and update the pitch of the midi controller. We also store the note being pressed into a circular LIFO buffer. On a Note Off event we remove the note being released from the LIFO buffer, we then decrement the gate, and then check the LIFO buffer for the most recently pressed note that is still active and update the pitch to match this note. On a Control Change or Pitch Bend event we update the value of the fader bank, knob bank, button bank, mod wheel, or pitch bend. For all of these events, after updating the state of the midi controller we send a notification to the audio processing task with the corresponding midi event bit sent in the notification value.  
+                </p>
+            </div>
+            <h3>Audio Processing Block</h3>
+            <div class = "p-flex">
+              <p style = "text-align:left">
+                The audio processing block contains one task that receives notifications from the midi processing block and then synthesizes PCM values that are then sent to the PCM5102A. At the core of the audio processing block is the digital oscillator, it has three waveforms, a sin, sawtooth, and square wave, which can be selected through the midi controllers button bank. The frequency of the oscillator is updated on the reception of a Note On, Note Off, or Pitch Bend notification. The amplitude of the oscillator is determined by the ADSR envelope. The attack of the envelope is triggered on a Note On event, and the release is triggered when the gate of the midi controller becomes 0.
+              </p>
             </div>
             <div class = "img-flex">
                 <iframe width="420" height="345" src="https://www.youtube.com/embed/oUR1ITL3Quo" allow="fullscreen;">
