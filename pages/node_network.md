@@ -53,10 +53,10 @@ This project was just recently started and there are many features I want to eve
 
 As of right now the GUI simply displays information on all nodes at the same time but as more branches are added they become smaller on the screen and the information ends up not being visible at all, my goal is to create a tab based GUI with user input to select tabs. This will increase the amount of branches a root can have as well as offer more control for the user. With inputs at the root the user could be able to shutdown or trigger events on any online branches. This task will require more research into LVGL.
 
-## Extend Network Reach
+### Extend Network Reach
 
 The main limiter to the networks reach at this point is the wifi range on the root node. My plan to extend the reach of this network is to initialize all branch nodes as wifi-access points as well, so if a branch is not in range of the root node it can send a message through another branch eventually making its way to the root node. This means that by stringing togather chains of ESP32s you can gather data from a very long distance (although with a lot of latency). One complication of this feature would be the timeout handling done by the root node. To send a keep alive to the farthest branch it will also need to send the message through multiple other branch nodes, so the path to every branch node will need to be stored in the root node and somehow indicated in the KEEP_ALIVE message being sent throught the branches.
 
-## Implement Multi-DUT Testing
+### Implement Multi-DUT Testing
 
 As dicussed in the Jenkins Pipeline section I want to create a test suite that can deal with multiple ESP32s at once, this way I don't have to create a mock root node in python I can just use another ESP32 to verify the branch nodes behaviour.
