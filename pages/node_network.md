@@ -1,0 +1,62 @@
+---
+permalink: /node_network
+layout: page
+title: Node Network
+page_title: ESP32 Node Network
+---
+
+![node_network_thumbnail](assets/imgs/node_network_thumbnail.jpg)
+
+In this project I created a node network using ESP IDF and FreeRTOS on the ESP32. I also created a Jenkins pipeline to automate building, flashing, and testing the code when a push is made to this <a href="https://github.com/03predo/NodeNetwork">git repo</a>. The tests for the code are written in python using the embedded pytest framework. The features of the network as of right now include, the ability to send user input and sensor data from a number of branch nodes to the root node, monitor and maintain branch node activity from the root node to detect unresponsive branches and shut them down, and a GUI to display branch node information created using LVGL.
+
+## Branch Node
+
+The branch nodes are responsible for collecting data from user input or from sensors and sending it to the root node. To accomplish this, every branch has two sockets, message(msg) and control(ctrl). The message socket is used to post data to the root node and the control socket is used to receive requests or commands from the root node. Whenever new data is found on an input it is sent directly to the root node via the message socket. Because there can be multiple inputs per branch node a mutex is used to prevent multiple tasks writing to the message socket at one time. As of right now there are two commands that the root node can send to any branch node, KEEP_ALIVE and SHUTDOWN, these are received on the control socket. When KEEP_ALIVE is received the branch node will post any available data to the root node to verify the connection is still alive. When SHUTDOWN is received this means the root node is shutting down and the branch node should follow suit. Diagrams of these processes' are shown in the Node Communication section.
+
+## Root Node
+
+The root node is responsible for receiving and displaying information sent from the branch nodes as well as monitoring branch-node activity. It has one socket to accept incoming connections on, once a branch has succesfully connected it's inactive timer is started and it's socket data and timer handle is stored in the node database(node_db). If a POST message is received from the branch the inactive timer will reset and the corresponding GUI widget will be updated, but if the inactive timer reaches the configured threshold SOCKET_TIMEOUT it sends a KEEP_ALIVE message to the ctrl socket of the branch. If the branch node doesn't respond before the configured threshold KEEP_ALIVE_TIMEOUT is reached the root node will delete the branch, otherwise it will restart the inactive timer. If an internal error occurs the root node will send SHUTDOWN messages to all active branch nodes and then proceed to shutdown itself.
+
+## Node Communication
+
+The messages sent by the root node and branch node all have the same format. Every message has three fields containing hexadecimal values, the first is the socket ID, then the message type, then the message body or value. So a typical message sent by a socket would be of this form 'X3 X0 X1;', this message is coming from socket ID 3, it's message type is RECV_COMPLETE, and the body represents the receive status 1 which means a success. All messages are ended with a semicolon as the body of a message can be more than one digit. The socket ID is a combination of the branch ID and the socket type. The branch ID is derived from the IP given to a branch node from the root node, so the first branch to connect is Branch 1 and the next is Branch 2 and so on. The least significant bit represents the socket type, 1 for message socket and 0 for control socket, the rest of the bits represent the branch ID, so for the example above socket ID 3 means this message is coming from the message socket of Branch 1. For messages coming from the root node the socket ID is always 0. The message type field is used to inform the root node on how to interpret the message body. For the above example the message type field tells us the body represents either a succesfull or failed receive, but for POST messages the body contains information about the signal name(ie. BUTTON) and signal data(ie. ON or OFF) being posted.
+
+Here is the flowchart for branch node startup. The NODE_INFO message lets the root node know that a new branch has been added so it can store the new sockets in the node database.
+
+![](assets/imgs/nn_startup.jpg)
+
+Here is the flowchart for a post from a branch node. The first 8 bits of the POST msg body contains the value of the signal, and the last 4 bits contain the signal name. As of right now the only signals implemented are button and temperature.
+
+![](assets/imgs/nn_post.jpg)
+
+Here is the flowchart for a branch timeout. When a KEEP_ALIVE is received on a branch node it immediately sends a RECV_COMPLETE SUCCESS via the control socket to the root node and then triggers another POST message to be sent from the message socket. If no confirmation is sent before the KEEP_ALIVE_TIMEOUT is reached the root node will delete the branch from the node database.
+
+![](assets/imgs/nn_timeout.jpg)
+
+I have created a Jenkins pipeline to automate the building, flashing, and running of tests on a push to the git repo. The pipeline script can be found in the README file located in the repo [here](https://github.com/03predo/NodeNetwork/blob/master/README.md). It uses the ESP-IDF docker image found [here](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-guides/tools/idf-docker-image.html) to build and flash the code to the ESP32 then uses embedded pytest to run a test suite found in the root node folder of the repo. As of right now I only have tests written for the root node as it is easy to mock a branch node with basic python sockets. But testing the branch node would need a mock root node which would be much more complex. My current plan to workaround this issue is to use embedded pytests multi DUT (multiple device under test) feature to test the root and branch at the same time found [here](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/contribute/esp-idf-tests-with-pytest.html#multi-dut-tests-with-different-apps-and-targets). The shell scripts wifi_connect.sh and jenkins_permissions.sh are used to give Jenkins access to the wifi and necessary ports without hard-coding the sudo password into the pipeline script.
+
+## Demo Videos
+
+This video shows the functionality of the network as of right now, first I push the button then use a hair dryer to raise the temperature.
+
+[![node_network](https://img.youtube.com/vi/tI21DAQu1Q0/0.jpg)](https://www.youtube.com/watch?v=tI21DAQu1Q0)
+
+This video shows the network configured for 4 nodes and shows the root node handling three online branches then deleting them when they become inactive.
+
+[![node_network](https://img.youtube.com/vi/VA3u3m_rSng/0.jpg)](https://www.youtube.com/watch?v=VA3u3m_rSng)
+
+## Next Steps
+
+This project was just recently started and there are many features I want to eventually add. A couple are listed here.
+
+### Improved GUI
+
+As of right now the GUI simply displays information on all nodes at the same time but as more branches are added they become smaller on the screen and the information ends up not being visible at all, my goal is to create a tab based GUI with user input to select tabs. This will increase the amount of branches a root can have as well as offer more control for the user. With inputs at the root the user could be able to shutdown or trigger events on any online branches. This task will require more research into LVGL.
+
+## Extend Network Reach
+
+The main limiter to the networks reach at this point is the wifi range on the root node. My plan to extend the reach of this network is to initialize all branch nodes as wifi-access points as well, so if a branch is not in range of the root node it can send a message through another branch eventually making its way to the root node. This means that by stringing togather chains of ESP32s you can gather data from a very long distance (although with a lot of latency). One complication of this feature would be the timeout handling done by the root node. To send a keep alive to the farthest branch it will also need to send the message through multiple other branch nodes, so the path to every branch node will need to be stored in the root node and somehow indicated in the KEEP_ALIVE message being sent throught the branches.
+
+## Implement Multi-DUT Testing
+
+As dicussed in the Jenkins Pipeline section I want to create a test suite that can deal with multiple ESP32s at once, this way I don't have to create a mock root node in python I can just use another ESP32 to verify the branch nodes behaviour.
