@@ -1,6 +1,6 @@
 ---
-header_title: Video Streaming
-title: OV7670 Video Streaming Server and Client
+title: Video Streaming
+page_title: OV7670 Video Streaming Server and Client
 ---
 
 Paragraph
