@@ -1,16 +1,27 @@
 title: Preston Dresser
 theme: minima
+
+base_url: /03predo.github.io
+repository: 03predo/03predo.github.io
+
 plugins:
   - jekyll-relative-links
   - jekyll-seo-tag
+
 relative_links:
   enabled: true
   collections: true
+
+header_pages:
+  - pages/predos.md
+  - pages/video_streaming.md
+  - pages/digital_synth.md
+
 include:
-  - index.md
-  - file.md
+  - pages
 
 author: Preston Dresser
 email: preston.dresser16@gmail.com
 github_username:  03predo
 linkedin_username: preston-dresser
+youtube_username: prestondresser
