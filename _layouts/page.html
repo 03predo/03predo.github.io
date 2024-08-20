@@ -2,13 +2,11 @@
 layout: default
 ---
 
-<article class="post">
+<div class="home">
   {%- if page.page_title -%}
     <h1 class="page-heading">{{ page.page_title }}</h1>
   {%- endif -%}
 
-  <div class="post-content">
-    {{ content }}
-  </div>
+  {{ content }}
 
-</article>
+</div>
